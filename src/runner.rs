@@ -2,18 +2,18 @@ use std::io::Write;
 
 use crate::{CrosstermWindow, CrosstermWindowSettings};
 
-use bevy::app::{App, AppExit, Events};
+use bevy::{app::{App, AppExit}, ecs::event::Events};
 use bevy::window::{WindowCreated, WindowId, WindowResized};
 use crossterm::{ExecutableCommand, QueueableCommand};
 
 pub fn crossterm_runner(mut app: App) {
     let settings = app
-        .resources
-        .get_or_insert_with(bevy::app::ScheduleRunnerSettings::default)
+        .world
+        .get_resource_or_insert_with(bevy::app::ScheduleRunnerSettings::default)
         .to_owned();
     let window_settings = app
-        .resources
-        .get_or_insert_with(CrosstermWindowSettings::default)
+        .world
+        .get_resource_or_insert_with(CrosstermWindowSettings::default)
         .clone();
 
     let mut term = std::io::stdout();
@@ -40,7 +40,7 @@ pub fn crossterm_runner(mut app: App) {
     }
 
     // Insert our window resources so that other parts of our app can use them
-    app.resources.insert(window);
+    app.insert_resource(window);
 
     term.queue(crossterm::terminal::Clear(
         crossterm::terminal::ClearType::All,
@@ -51,7 +51,7 @@ pub fn crossterm_runner(mut app: App) {
 
     // Publish to the app that a terminal window has been created
     {
-        let mut window_created_events = app.resources.get_mut::<Events<WindowCreated>>().unwrap();
+        let mut window_created_events = app.world.get_resource_mut::<Events<WindowCreated>>().unwrap();
         window_created_events.send(WindowCreated {
             id: WindowId::primary(),
         });
@@ -82,13 +82,13 @@ pub fn crossterm_runner(mut app: App) {
                                     && key_event.modifiers.contains(KeyModifiers::CONTROL)
                                 {
                                     let mut app_exit_events =
-                                        app.resources.get_mut::<Events<AppExit>>().unwrap();
+                                        app.world.get_resource_mut::<Events<AppExit>>().unwrap();
                                     app_exit_events.send(AppExit);
                                 }
 
                                 let mut bevy_key_events = app
-                                    .resources
-                                    .get_mut::<Events<crossterm::event::KeyEvent>>()
+                                    .world
+                                    .get_resource_mut::<Events<crossterm::event::KeyEvent>>()
                                     .unwrap();
                                 bevy_key_events.send(key_event);
                             }
@@ -96,8 +96,8 @@ pub fn crossterm_runner(mut app: App) {
                             // Republish mouse events in bevy
                             crossterm::event::Event::Mouse(mouse_event) => {
                                 let mut bevy_mouse_events = app
-                                    .resources
-                                    .get_mut::<Events<crossterm::event::MouseEvent>>()
+                                    .world
+                                    .get_resource_mut::<Events<crossterm::event::MouseEvent>>()
                                     .unwrap();
                                 bevy_mouse_events.send(mouse_event);
                             }
@@ -106,7 +106,7 @@ pub fn crossterm_runner(mut app: App) {
                             crossterm::event::Event::Resize(width, height) => {
                                 // Update the window resource and publish an event for the window being resized
                                 let mut window_resized_events =
-                                    app.resources.get_mut::<Events<WindowResized>>().unwrap();
+                                    app.world.get_resource_mut::<Events<WindowResized>>().unwrap();
                                 window_resized_events.send(WindowResized {
                                     id: WindowId::primary(),
                                     width: width as f32,
@@ -114,10 +114,12 @@ pub fn crossterm_runner(mut app: App) {
                                 });
 
                                 let mut window =
-                                    app.resources.get_mut::<CrosstermWindow>().unwrap();
+                                    app.world.get_resource_mut::<CrosstermWindow>().unwrap();
                                 window.height = height;
                                 window.width = width;
-                            }
+                            },
+                            // NOTE: Ignore other events for now
+                            _ => {}
                         }
                     } else {
                         break;
@@ -130,7 +132,7 @@ pub fn crossterm_runner(mut app: App) {
                 // After all the other systems have updated, check if there are any AppExit events and
                 // handle them
                 {
-                    let app_exit_events = app.resources.get::<Events<AppExit>>().unwrap();
+                    let app_exit_events = app.world.get_resource::<Events<AppExit>>().unwrap();
                     let mut app_exit_reader = app_exit_events.get_reader();
                     if app_exit_reader.iter(&app_exit_events).next().is_some() {
                         // We're breaking out, the app requested an exit

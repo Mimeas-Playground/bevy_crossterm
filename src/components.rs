@@ -7,9 +7,10 @@ use unicode_segmentation::UnicodeSegmentation;
 
 pub use crossterm::style::Color;
 
-#[derive(Default)]
+#[derive(Default, Resource)]
 pub(crate) struct PreviousEntityDetails(pub HashMap<Entity, (PreviousPosition, PreviousSize)>);
 
+#[derive(Resource)]
 pub(crate) struct PreviousWindowColors(pub Colors);
 
 impl Default for PreviousWindowColors {
@@ -18,7 +19,7 @@ impl Default for PreviousWindowColors {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Resource)]
 pub(crate) struct EntitiesToRedraw {
     pub full_redraw: bool,
     pub to_clear: HashSet<Entity>,
@@ -268,7 +269,7 @@ impl StyleMap {
     }
 }
 
-#[derive(Eq, PartialEq, Debug)]
+#[derive(Eq, PartialEq, Debug, Component)]
 pub struct Visible {
     pub is_visible: bool,
     pub is_transparent: bool,
@@ -376,7 +377,7 @@ impl Sprite {
     }
 }
 
-#[derive(Default, Eq, PartialEq, Debug)]
+#[derive(Default, Eq, PartialEq, Debug, Component)]
 pub struct Position {
     pub x: i32,
     pub y: i32,

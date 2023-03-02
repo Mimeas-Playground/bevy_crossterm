@@ -119,10 +119,10 @@ pub(crate) fn calculate_entities_to_redraw(
     changed: Query<
         Entity,
         Or<(
-            Mutated<Position>,
-            Mutated<Handle<StyleMap>>,
-            Mutated<Visible>,
-            Mutated<Handle<Sprite>>,
+            Changed<Position>,
+            Changed<Handle<StyleMap>>,
+            Changed<Visible>,
+            Changed<Handle<Sprite>>,
         )>,
     >,
     added: Query<
@@ -139,7 +139,8 @@ pub(crate) fn calculate_entities_to_redraw(
             With<Visible>,
             With<Handle<Sprite>>,
         ),
-    >,
+        >,
+    removed: RemovedComponents<Handle<Sprite>>,
 ) {
     entities.full_redraw = false;
     entities.to_draw.clear();
@@ -148,7 +149,7 @@ pub(crate) fn calculate_entities_to_redraw(
     let mut draw_set = HashSet::default();
 
     // If a resize happened the whole screen is invalidated
-    if resize_events.get_reader().latest(&resize_events).is_some() || window.colors != prev_colors.0
+    if resize_events.get_reader().iter(&resize_events).last().is_some() || window.colors != prev_colors.0
     {
         // We need a full redraw, so flag a full update and bail early
         // No need to do fancy update calculations
@@ -297,10 +298,8 @@ pub(crate) fn calculate_entities_to_redraw(
         });
     }
 
-    let removed = all.removed::<Handle<Sprite>>();
-
-    for entity in removed {
-        entities.to_clear.insert(*entity);
+    for entity in removed.iter() {
+        entities.to_clear.insert(entity);
     }
 
     for ent_to_draw in draw_set.iter() {

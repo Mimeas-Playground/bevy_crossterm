@@ -8,11 +8,11 @@ mod systems;
 
 pub struct CrosstermPlugin;
 impl Plugin for CrosstermPlugin {
-    fn build(&self, app: &mut bevy::app::AppBuilder) {
-        app.add_resource(Cursor::default())
-            .add_resource(components::PreviousEntityDetails::default())
-            .add_resource(components::EntitiesToRedraw::default())
-            .add_resource(components::PreviousWindowColors::default())
+    fn build(&self, app: &mut App) {
+        app.insert_resource(Cursor::default())
+            .insert_resource(components::PreviousEntityDetails::default())
+            .insert_resource(components::EntitiesToRedraw::default())
+            .insert_resource(components::PreviousWindowColors::default())
             .add_asset::<components::Sprite>()
             .add_asset::<components::StyleMap>()
             .init_asset_loader::<asset_loaders::SpriteLoader>()
@@ -24,30 +24,30 @@ impl Plugin for CrosstermPlugin {
             // This must be before LAST because change tracking is cleared during LAST, but AssetEvents are published
             // after POST_UPDATE. The timing for all these things is pretty delicate
             .add_stage_before(
-                bevy::app::stage::LAST,
+               CoreStage::Last,
                 stage::PRE_RENDER,
                 SystemStage::parallel(),
             )
             .add_stage_after(stage::PRE_RENDER, stage::RENDER, SystemStage::parallel())
             .add_stage_after(stage::RENDER, stage::POST_RENDER, SystemStage::parallel())
             .add_system_to_stage(
-                bevy::app::stage::POST_UPDATE,
-                systems::add_previous_position.system(),
+               CoreStage::PostUpdate,
+                systems::add_previous_position,
             )
             // Needs asset events, and they aren't created until after POST_UPDATE, so we put them in PRE_RENDER
             .add_system_to_stage(
                 stage::PRE_RENDER,
-                systems::calculate_entities_to_redraw.system(),
+                systems::calculate_entities_to_redraw
             )
-            .add_system_to_stage(stage::RENDER, systems::crossterm_render.system())
+            .add_system_to_stage(stage::RENDER, systems::crossterm_render)
             .add_system_to_stage(
                 stage::POST_RENDER,
-                systems::update_previous_position.system(),
+                systems::update_previous_position
             );
     }
 }
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, Resource)]
 pub struct CrosstermWindowSettings {
     colors: components::Colors,
     title: Option<String>,
@@ -82,7 +82,7 @@ impl CrosstermWindowSettings {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Resource)]
 pub struct CrosstermWindow {
     height: u16,
     width: u16,
@@ -135,7 +135,7 @@ impl CrosstermWindow {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Resource)]
 pub struct Cursor {
     pub x: i32,
     pub y: i32,

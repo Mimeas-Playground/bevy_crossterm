@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use systems::crossterm_render;
 
 mod asset_loaders;
 pub mod components;
@@ -23,27 +24,18 @@ impl Plugin for CrosstermPlugin {
             // Systems and stages
             // This must be before LAST because change tracking is cleared during LAST, but AssetEvents are published
             // after POST_UPDATE. The timing for all these things is pretty delicate
-            .add_stage_before(
-               CoreStage::Last,
-                stage::PRE_RENDER,
-                SystemStage::parallel(),
+            .configure_sets(
+                (
+                    RenderSet::PreRender,
+                    RenderSet::Render,
+                    RenderSet::PostRender
+                ).before(CoreSet::Last)
             )
-            .add_stage_after(stage::PRE_RENDER, stage::RENDER, SystemStage::parallel())
-            .add_stage_after(stage::RENDER, stage::POST_RENDER, SystemStage::parallel())
-            .add_system_to_stage(
-               CoreStage::PostUpdate,
-                systems::add_previous_position,
-            )
+            .add_system(systems::add_previous_position.in_base_set(CoreSet::PostUpdate))
             // Needs asset events, and they aren't created until after POST_UPDATE, so we put them in PRE_RENDER
-            .add_system_to_stage(
-                stage::PRE_RENDER,
-                systems::calculate_entities_to_redraw
-            )
-            .add_system_to_stage(stage::RENDER, systems::crossterm_render)
-            .add_system_to_stage(
-                stage::POST_RENDER,
-                systems::update_previous_position
-            );
+            .add_system(systems::calculate_entities_to_redraw.in_base_set(RenderSet::PreRender))
+            .add_system(crossterm_render.in_base_set(RenderSet::Render))
+            .add_system(systems::update_previous_position.in_base_set(RenderSet::PostRender));
     }
 }
 
@@ -82,7 +74,7 @@ impl CrosstermWindowSettings {
     }
 }
 
-#[derive(Debug, Resource)]
+#[derive(Debug, Component)]
 pub struct CrosstermWindow {
     height: u16,
     width: u16,
@@ -140,6 +132,14 @@ pub struct Cursor {
     pub x: i32,
     pub y: i32,
     pub hidden: bool,
+}
+
+#[derive(Debug, Hash, Clone, PartialEq, Eq, SystemSet)]
+#[system_set(base)]
+enum RenderSet {
+    PreRender,
+    Render,
+    PostRender
 }
 
 pub mod stage {

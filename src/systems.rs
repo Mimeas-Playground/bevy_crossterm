@@ -10,7 +10,7 @@ use crate::{CrosstermWindow, Cursor};
 use bevy::utils::HashSet;
 
 use bevy::prelude::*;
-use bevy::window::WindowResized;
+use bevy::window::{WindowResized, PrimaryWindow};
 use components::EntitiesToRedraw;
 use crossterm::{ExecutableCommand, QueueableCommand};
 
@@ -104,7 +104,7 @@ pub(crate) fn calculate_entities_to_redraw(
     mut prev_colors: ResMut<PreviousWindowColors>,
     mut entities: ResMut<EntitiesToRedraw>,
     previous_details: Res<PreviousEntityDetails>,
-    window: Res<CrosstermWindow>,
+    window: Query<&CrosstermWindow, With<PrimaryWindow>>,
     resize_events: Res<Events<WindowResized>>,
     sprites: Res<Assets<Sprite>>,
     sprite_asset_events: Res<Events<AssetEvent<Sprite>>>,
@@ -140,8 +140,10 @@ pub(crate) fn calculate_entities_to_redraw(
             With<Handle<Sprite>>,
         ),
         >,
-    removed: RemovedComponents<Handle<Sprite>>,
+    mut removed: RemovedComponents<Handle<Sprite>>,
 ) {
+    let window = window.single();
+
     entities.full_redraw = false;
     entities.to_draw.clear();
     entities.to_clear.clear();
@@ -518,7 +520,7 @@ fn clear_entity(
 
 pub(crate) fn crossterm_render(
     changed_entities: Res<EntitiesToRedraw>,
-    window: Res<CrosstermWindow>,
+    window: Query<&CrosstermWindow, With<PrimaryWindow>>,
     cursor: Res<Cursor>,
     previous_details: Res<PreviousEntityDetails>,
     sprites: Res<Assets<Sprite>>,
@@ -533,6 +535,7 @@ pub(crate) fn crossterm_render(
 ) {
     let stdout = std::io::stdout();
     let mut term = stdout.lock();
+    let window = window.single();
 
     // If we're gonna be drawing stuff, hide the cursor so it doesn't jump all over the place
     if !changed_entities.to_draw.is_empty() {

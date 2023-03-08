@@ -2,8 +2,8 @@ use std::io::Write;
 
 use crate::{CrosstermWindow, CrosstermWindowSettings};
 
-use bevy::{app::{App, AppExit}, ecs::event::Events};
-use bevy::window::{WindowCreated, WindowId, WindowResized};
+use bevy::{app::{App, AppExit}, ecs::event::Events, window::PrimaryWindow, prelude::With};
+use bevy::window::{WindowCreated, WindowResized};
 use crossterm::{ExecutableCommand, QueueableCommand};
 
 pub fn crossterm_runner(mut app: App) {
@@ -40,7 +40,8 @@ pub fn crossterm_runner(mut app: App) {
     }
 
     // Insert our window resources so that other parts of our app can use them
-    app.insert_resource(window);
+    let window_id = app.world.spawn(window).insert(PrimaryWindow).id();
+    // app.insert_resource(window);
 
     term.queue(crossterm::terminal::Clear(
         crossterm::terminal::ClearType::All,
@@ -53,7 +54,7 @@ pub fn crossterm_runner(mut app: App) {
     {
         let mut window_created_events = app.world.get_resource_mut::<Events<WindowCreated>>().unwrap();
         window_created_events.send(WindowCreated {
-            id: WindowId::primary(),
+            window: window_id,
         });
     }
 
@@ -108,15 +109,16 @@ pub fn crossterm_runner(mut app: App) {
                                 let mut window_resized_events =
                                     app.world.get_resource_mut::<Events<WindowResized>>().unwrap();
                                 window_resized_events.send(WindowResized {
-                                    id: WindowId::primary(),
+                                    window: window_id,
                                     width: width as f32,
                                     height: height as f32,
                                 });
 
                                 let mut window =
-                                    app.world.get_resource_mut::<CrosstermWindow>().unwrap();
-                                window.height = height;
-                                window.width = width;
+                                    app.world.query_filtered::<&mut CrosstermWindow, With<PrimaryWindow>>()
+                                    .single_mut(&mut app.world);
+                                window.as_mut().height = height;
+                                window.as_mut().width = width;
                             },
                             // NOTE: Ignore other events for now
                             _ => {}

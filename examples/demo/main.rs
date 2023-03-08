@@ -1,17 +1,18 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, log::{LogPlugin, self}};
 use bevy_crossterm::prelude::*;
 
 use std::default::Default;
 
-mod animation;
-mod colors;
-mod finale;
-mod sprites;
 mod title;
+mod sprites;
+mod colors;
+mod animation;
+mod finale;
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Default, States)]
 pub enum GameState {
-    Loading = 0,
+    #[default]
+    Loading,
     Title,
     Sprites,
     Colors,
@@ -33,45 +34,68 @@ impl GameState {
     }
 }
 
-static STAGE: &str = "DEMO";
+#[derive(Debug, Resource, Deref, DerefMut)]
+pub struct HandleCollection(Vec<HandleUntyped>);
+
+#[derive(Debug, Resource, Deref, DerefMut)]
+pub struct SceneRoot(Entity);
 
 pub fn main() {
     // Window settings must happen before the crossterm Plugin
     let mut settings = CrosstermWindowSettings::default();
     settings.set_title("bevy_crossterm demo");
 
-    App::build()
-        .add_resource(settings)
-        .add_resource(bevy::app::ScheduleRunnerSettings::run_loop(
+    App::new()
+        .insert_resource(settings)
+        .insert_resource(bevy::app::ScheduleRunnerSettings::run_loop(
             std::time::Duration::from_millis(16),
         ))
-        .add_plugins(DefaultPlugins)
+        .add_plugins(
+            DefaultPlugins
+                .set(AssetPlugin {
+                    watch_for_changes: false,
+                    ..default()
+                })
+                 // .set(LogPlugin {
+                 //     level: log::Level::ERROR,
+                 //     ..default()
+                 // })
+        )
         .add_plugin(CrosstermPlugin)
-        .add_startup_system(demo_setup.system())
-        .add_startup_system(loading_system.system())
-        .add_stage_after(stage::UPDATE, STAGE, StateStage::<GameState>::default())
-        .add_resource(State::new(GameState::Loading))
-        .on_state_update(STAGE, GameState::Loading, check_for_loaded.system())
-        .on_state_enter(STAGE, GameState::Title, title::setup.system())
-        .on_state_update(STAGE, GameState::Title, just_wait_and_advance.system())
-        .on_state_exit(STAGE, GameState::Title, simple_teardown.system())
-        .on_state_enter(STAGE, GameState::Sprites, sprites::setup.system())
-        .on_state_update(STAGE, GameState::Sprites, just_wait_and_advance.system())
-        .on_state_exit(STAGE, GameState::Sprites, simple_teardown.system())
-        .on_state_enter(STAGE, GameState::Colors, colors::setup.system())
-        .on_state_update(STAGE, GameState::Colors, just_wait_and_advance.system())
-        .on_state_exit(STAGE, GameState::Colors, simple_teardown.system())
-        .on_state_enter(STAGE, GameState::Animation, animation::setup.system())
-        .on_state_update(STAGE, GameState::Animation, animation::update.system())
-        .on_state_exit(STAGE, GameState::Animation, simple_teardown.system())
-        .on_state_enter(STAGE, GameState::Finale, finale::setup.system())
-        .on_state_update(STAGE, GameState::Finale, just_wait_and_advance.system())
-        .on_state_exit(STAGE, GameState::Finale, simple_teardown.system())
+        .add_state::<GameState>()
+        .add_systems((
+            demo_setup.on_startup(),
+            loading_system.on_startup(),
+            just_wait_and_advance
+        ))
+        .add_system(
+            check_for_loaded.in_set(OnUpdate(GameState::Loading))
+        )
+        .add_systems((
+            title::setup.in_schedule(OnEnter(GameState::Title)),
+            simple_teardown.in_schedule(OnExit(GameState::Title)),
+        ))
+        .add_systems((
+            sprites::setup.in_schedule(OnEnter(GameState::Sprites)),
+            simple_teardown.in_schedule(OnExit(GameState::Sprites))
+        ))
+        .add_systems((
+            colors::setup.in_schedule(OnEnter(GameState::Colors)),
+            simple_teardown.in_schedule(OnExit(GameState::Colors))
+        ))
+        .add_systems((
+            animation::setup.in_schedule(OnEnter(GameState::Animation)),
+            animation::update.in_set(OnUpdate(GameState::Animation)),
+            simple_teardown.in_schedule(OnExit(GameState::Animation))
+        ))
+        .add_systems((
+            finale::setup.in_schedule(OnEnter(GameState::Finale)),
+        ))
         .run();
 }
 
 fn loading_system(
-    commands: &mut Commands,
+    mut commands: Commands,
     asset_server: Res<AssetServer>,
     mut cursor: ResMut<Cursor>,
 ) {
@@ -80,51 +104,58 @@ fn loading_system(
     // Load the assets we want
     let handles = asset_server.load_folder("demo").unwrap();
 
-    asset_server.watch_for_changes().unwrap();
-
-    commands.insert_resource(handles);
+    commands.insert_resource(HandleCollection(handles));
 }
 
 // This function exists soely because bevy's asset loading is async.
 // We need to wait until all assets are loaded before we do anyhting with them.
 fn check_for_loaded(
     asset_server: Res<AssetServer>,
-    handles: Res<Vec<HandleUntyped>>,
-    mut state: ResMut<State<GameState>>,
+    mut handles: ResMut<HandleCollection>,
+    mut next_state: ResMut<NextState<GameState>>
 ) {
-    let data = asset_server.get_group_load_state(handles.iter().map(|handle| handle.id));
 
+    handles.0 = handles.iter()
+           .filter_map(|h| {
+               if asset_server.get_load_state(h.id()) == bevy::asset::LoadState::Failed {
+                   None
+               }
+               else {
+                   Some(h.clone())
+               }
+           }).collect();
+
+    let data = asset_server.get_group_load_state(handles.iter().map(|handle| handle.id()));
     match data {
-        bevy::asset::LoadState::NotLoaded | bevy::asset::LoadState::Loading => {}
         bevy::asset::LoadState::Loaded => {
-            let next_state = state.next_state().unwrap();
-            state.set_next(next_state).unwrap();
-        }
-        bevy::asset::LoadState::Failed => {}
+            next_state.set(GameState::Title);
+        },
+        _ => {}
     }
 }
 
 // Setup anything needed globally for the demo
-pub fn demo_setup(commands: &mut Commands) {
-    let scene_root = commands.spawn(()).current_entity().unwrap();
+pub fn demo_setup(mut commands: Commands) {
+    let scene_root = commands.spawn(()).id();
 
-    commands.insert_resource(scene_root);
+    commands.insert_resource(SceneRoot(scene_root));
 }
 
 // Helper function to see if there was a key press this frame
-pub fn detect_keypress(keys: Res<Events<KeyEvent>>) -> bool {
-    keys.get_reader().latest(&keys).is_some()
+pub fn detect_keypress(mut keys: EventReader<KeyEvent>) -> bool {
+    keys.iter().last().is_some()
 }
 
 // Simple update function that most screens will use
 pub fn just_wait_and_advance(
-    mut state: ResMut<State<GameState>>,
+    state: Res<State<GameState>>,
+    mut next_state: ResMut<NextState<GameState>,>,
     mut app_exit: ResMut<Events<bevy::app::AppExit>>,
-    keys: Res<Events<KeyEvent>>,
+    keys: EventReader<KeyEvent>,
 ) {
     if detect_keypress(keys) {
-        if let Some(next_stage) = state.next_state() {
-            state.set_next(next_stage).unwrap();
+        if let Some(next_stage) = state.0.next_state() {
+            next_state.set(next_stage);
         } else {
             app_exit.send(bevy::app::AppExit);
         }
@@ -132,9 +163,9 @@ pub fn just_wait_and_advance(
 }
 
 // Looks for an entity resource and then despawns that entity and all it's children
-pub fn simple_teardown(commands: &mut Commands, mut scene_root: ResMut<Entity>) {
-    commands.despawn_recursive(*scene_root);
+pub fn simple_teardown(mut commands: Commands, mut scene_root: ResMut<SceneRoot>) {
+    commands.entity(scene_root.0).despawn_recursive();
 
     // Create a new, valid scene_root
-    *scene_root = commands.spawn(()).current_entity().unwrap();
+    scene_root.0 = commands.spawn(()).id();
 }

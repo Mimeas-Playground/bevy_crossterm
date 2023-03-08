@@ -18,7 +18,6 @@ features = [
          ]
 
 [dependencies]
-wgpu-hal = "0.14.0"
 anyhow = "1.0"
 bitflags = "1.2"
 crossterm = { version = "0.26", features = ["serde"] }
@@ -31,5 +30,5 @@ broccoli = "1.2.5"
 ron = "0.6"
 textwrap = "0.13.1"
 
-# [[example]]
-# name = "window"
+[[example]]
+name = "window"

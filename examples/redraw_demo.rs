@@ -1,8 +1,11 @@
 use bevy::app::AppExit;
 use bevy::prelude::*;
+use bevy::window::PrimaryWindow;
 use bevy_crossterm::prelude::*;
+use bevy_crossterm::prelude::Color;
 
 use std::default::Default;
+use std::time::Duration;
 
 // This is probably the busiest example. This demonstrates that bevy_crossterm's incrememntal drawing
 // system will properly redraw sprites when required. To simulate movement - bevy_crossterm blanks out the
@@ -14,38 +17,43 @@ use std::default::Default;
 // Furthermore, this example also illustrates that the collision detection happens recusively - if it weren't for that,
 // the "#" would be overwritten when the box is redrawn.
 
+#[derive(Resource)]
+struct Interval(Timer);
+
 pub fn main() {
     // Window settings must happen before the crossterm Plugin
     let mut settings = CrosstermWindowSettings::default();
     settings.set_title("Redraw example");
 
-    App::build()
-        .add_resource(settings)
-        .add_resource(bevy::core::DefaultTaskPoolOptions::with_num_threads(1))
+    App::new()
+        .insert_resource(settings)
+        .insert_resource(bevy::core::TaskPoolOptions::with_num_threads(1))
         // 60Hz update is probably a bit gratuitous for this but eh
-        .add_resource(bevy::app::ScheduleRunnerSettings::run_loop(
+        .insert_resource(bevy::app::ScheduleRunnerSettings::run_loop(
             std::time::Duration::from_millis(16),
         ))
-        .add_resource(Timer::new(std::time::Duration::from_millis(250), true))
+        .insert_resource(Interval(Timer::new(Duration::from_millis(250), TimerMode::Repeating)))
         .add_plugins(DefaultPlugins)
         .add_plugin(CrosstermPlugin)
-        .add_startup_system(startup_system.system())
-        .add_system(update.system())
+        .add_startup_system(startup_system)
+        .add_system(update)
         .run();
 }
 
 // 5x5 box of spaces
 static BIG_BOX: &str = "       \n       \n       ";
 
+#[derive(Component)]
 struct Tag;
 
 fn startup_system(
-    commands: &mut Commands,
-    window: Res<CrosstermWindow>,
+    mut commands: Commands,
+    window: Query<&CrosstermWindow, With<PrimaryWindow>>,
     mut cursor: ResMut<Cursor>,
     mut sprites: ResMut<Assets<Sprite>>,
     mut stylemaps: ResMut<Assets<StyleMap>>,
 ) {
+    let window = window.single();
     cursor.hidden = true;
 
     // Create our resources
@@ -65,9 +73,9 @@ fn startup_system(
             },
             stylemap: white_bg.clone(),
             ..Default::default()
-        })
+        });
         // Moving entity that ensures the box will get redrawn each step the entity passes over it
-        .spawn(SpriteBundle {
+    commands.spawn(SpriteBundle {
             sprite: small_box,
             position: Position {
                 x: window.width() as i32 / 3,
@@ -77,7 +85,7 @@ fn startup_system(
             stylemap: plain.clone(),
             ..Default::default()
         })
-        .with(Tag); // Tagged with a unit struct so we can find it later to update it
+        .insert(Tag); // Tagged with a unit struct so we can find it later to update it
                     // Static entity that ensures we redraw all entities that need to
     commands.spawn(SpriteBundle {
         sprite: sprites.add(Sprite::new("#")),
@@ -93,14 +101,15 @@ fn startup_system(
 
 fn update(
     time: Res<Time>,
-    window: Res<CrosstermWindow>,
-    mut timer: ResMut<Timer>,
+    window: Query<&mut CrosstermWindow, With<PrimaryWindow>>,
+    mut timer: ResMut<Interval>,
     mut query: Query<(&Tag, &mut Position)>,
     mut app_exit: ResMut<Events<AppExit>>,
 ) {
-    timer.tick(time.delta_seconds());
+    let window = window.single();
+    timer.0.tick(time.delta());
 
-    if timer.just_finished() {
+    if timer.0.just_finished() {
         let (_, mut pos) = query.iter_mut().next().unwrap();
         pos.x += 1;
 

@@ -1,19 +1,30 @@
-use bevy::prelude::*;
-use bevy_crossterm::prelude::*;
+use std::time::Duration;
 
+use bevy::{prelude::*, window::PrimaryWindow};
+use bevy_crossterm::prelude::{*, Color};
+
+use crate::SceneRoot;
+
+#[derive(Component)]
 pub struct Velocity {
     pub x: i32,
     pub y: i32,
 }
 
+#[derive(Resource, Deref, DerefMut)]
+pub struct AnimInterval(Timer);
+
 pub fn setup(
-    commands: &mut Commands,
-    scene_root: Res<Entity>,
-    window: Res<CrosstermWindow>,
+    mut commands: Commands,
+    scene_root: Res<SceneRoot>,
+    window: Query<&CrosstermWindow, With<PrimaryWindow>>,
     asset_server: Res<AssetServer>,
     mut sprites: ResMut<Assets<Sprite>>,
     mut stylemaps: ResMut<Assets<StyleMap>>,
 ) {
+
+    let window = window.single();
+
     let default_style = stylemaps.add(StyleMap::default());
     let white = stylemaps.add(StyleMap::with_bg(Color::White));
 
@@ -29,60 +40,61 @@ pub fn setup(
         window.y_center() as i32 - test_box.y_center() as i32,
     );
 
-    commands
-        .spawn(SpriteBundle {
+    commands.spawn(
+        SpriteBundle {
             sprite: sprites.add(text_sprite),
             position: text_pos,
             stylemap: default_style.clone(),
             ..Default::default()
-        })
-        .with(Parent(*scene_root))
-        .spawn(SpriteBundle {
-            sprite: sprites.add(hor_divider),
-            position: divider_pos,
-            stylemap: default_style.clone(),
-            ..Default::default()
-        })
-        .with(Parent(*scene_root))
-        .spawn(SpriteBundle {
+        }
+    ).set_parent(scene_root.0);
+
+    commands.spawn(
+        SpriteBundle {
             sprite: sprites.add(test_box),
             stylemap: white.clone(),
             position: test_pos,
             ..Default::default()
-        })
-        .with(Parent(*scene_root))
-        .spawn(SpriteBundle {
-            sprite: asset_server.get_handle("demo/bounce.txt"),
-            stylemap: asset_server.get_handle("demo/bounce.stylemap"),
-            position: Position::new(window.x_center() as i32, window.y_center() as i32, 1),
-            ..Default::default()
-        })
-        .with(Parent(*scene_root))
-        .with(Velocity { x: 1, y: 1 });
+        }
+    ).set_parent(scene_root.0);
 
-    commands.insert_resource(Timer::new(std::time::Duration::from_millis(120), true));
+    commands.spawn(
+        SpriteBundle {
+            sprite: sprites.add(hor_divider),
+            position: divider_pos,
+            stylemap: default_style.clone(),
+            ..Default::default()
+        }
+    ).set_parent(scene_root.0);
+
+    commands.spawn((
+            SpriteBundle {
+                sprite: asset_server.get_handle("demo/bounce.txt"),
+                stylemap: asset_server.get_handle("demo/bounce.stylemap"),
+                position: Position::new(window.x_center() as i32, window.y_center() as i32, 1),
+                ..Default::default()
+            },
+        Velocity { x: 1, y: 1 }
+    )).set_parent(scene_root.0);
+
+    commands.insert_resource(AnimInterval(Timer::new(Duration::from_millis(120), TimerMode::Repeating)));
 }
 
 pub fn update(
-    keys: Res<Events<KeyEvent>>,
-    mut state: ResMut<State<crate::GameState>>,
-    mut app_exit: ResMut<Events<bevy::app::AppExit>>,
-    mut timer: ResMut<Timer>,
-    window: Res<CrosstermWindow>,
+    // keys: EventReader<KeyEvent>,
+    // state: Res<State<GameState>>,
+    // mut next: ResMut<NextState<GameState>>,
+    // mut app_exit: ResMut<Events<bevy::app::AppExit>>,
+    mut timer: ResMut<AnimInterval>,
+    window: Query<&CrosstermWindow, With<PrimaryWindow>>,
     time: Res<Time>,
     sprites: Res<Assets<Sprite>>,
     mut box_sprite: Query<(&mut Position, &mut Velocity, &Handle<Sprite>)>,
 ) {
-    timer.tick(time.delta_seconds());
 
-    if crate::detect_keypress(keys) {
-        if let Some(new_state) = state.next_state() {
-            state.set_next(new_state).unwrap();
-        } else {
-            app_exit.send(bevy::app::AppExit);
-        }
-        return;
-    }
+    let window = window.single();
+
+    timer.as_mut().tick(time.delta());
 
     if timer.just_finished() {
         let (mut pos, mut vel, sprite) = box_sprite.iter_mut().next().unwrap();

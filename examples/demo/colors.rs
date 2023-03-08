@@ -1,34 +1,37 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, window::PrimaryWindow};
 use bevy_crossterm::prelude::*;
+use bevy_crossterm::prelude::Color;
 
-use Color::*;
+use crate::SceneRoot;
 static COLORS: &[Color] = &[
-    Black,
-    DarkGrey,
-    Red,
-    DarkRed,
-    Green,
-    DarkGreen,
-    Yellow,
-    DarkYellow,
-    Blue,
-    DarkBlue,
-    Magenta,
-    DarkMagenta,
-    Cyan,
-    DarkCyan,
-    White,
-    Grey,
+    Color::Black,
+    Color::DarkGrey,
+    Color::Red,
+    Color::DarkRed,
+    Color::Green,
+    Color::DarkGreen,
+    Color::Yellow,
+    Color::DarkYellow,
+    Color::Blue,
+    Color::DarkBlue,
+    Color::Magenta,
+    Color::DarkMagenta,
+    Color::Cyan,
+    Color::DarkCyan,
+    Color::White,
+    Color::Grey,
 ];
 
 pub fn setup(
-    commands: &mut Commands,
-    scene_root: Res<Entity>,
-    window: Res<CrosstermWindow>,
+    mut commands: Commands,
+    scene_root: Res<SceneRoot>,
+    window: Query<&CrosstermWindow, With<PrimaryWindow>>,
     mut sprites: ResMut<Assets<Sprite>>,
     mut stylemaps: ResMut<Assets<StyleMap>>,
 ) {
     const Y_MARGIN: i32 = 2;
+
+    let window = window.single();
 
     let title_sprite =
         Sprite::new("bevy_crossterm supports up to 24-bit color! (on terminals where supported)");
@@ -39,14 +42,12 @@ pub fn setup(
 
     let default_style = stylemaps.add(StyleMap::default());
 
-    commands
-        .spawn(SpriteBundle {
-            sprite: sprites.add(title_sprite),
-            position: title_pos,
-            stylemap: default_style.clone(),
-            ..Default::default()
-        })
-        .with(Parent(*scene_root));
+    commands.spawn(SpriteBundle {
+        sprite: sprites.add(title_sprite),
+        position: title_pos,
+        stylemap: default_style.clone(),
+        ..Default::default()
+    }).set_parent(scene_root.0);
 
     let space = sprites.add(Sprite::new("    "));
 
@@ -57,14 +58,12 @@ pub fn setup(
 
         let stylemap = stylemaps.add(StyleMap::with_bg(*color));
 
-        commands
-            .spawn(SpriteBundle {
-                sprite: space.clone(),
-                stylemap,
-                position,
-                ..Default::default()
-            })
-            .with(Parent(*scene_root));
+        commands.spawn(SpriteBundle {
+            sprite: space.clone(),
+            stylemap,
+            position,
+            ..default()
+        }).set_parent(scene_root.0);
     }
 
     // ANSI colors
@@ -79,14 +78,12 @@ pub fn setup(
         let offset = color as i32 % colors_per_row;
         let position = Position::with_xy(color_x_start + (offset * 3), color_y_start + linenum);
 
-        commands
-            .spawn(SpriteBundle {
+        commands.spawn(SpriteBundle {
                 sprite: smaller_space.clone(),
                 stylemap,
                 position,
                 ..Default::default()
-            })
-            .with(Parent(*scene_root));
+            }).set_parent(scene_root.0);
     }
 
     // Linear gradients for RGB colors
@@ -107,14 +104,12 @@ pub fn setup(
 
         let stylemap = stylemaps.add(StyleMap::with_bg(color));
 
-        commands
-            .spawn(SpriteBundle {
+        commands.spawn(SpriteBundle {
                 sprite: smallest_space.clone(),
                 position,
                 stylemap,
                 ..Default::default()
-            })
-            .with(Parent(*scene_root));
+        }).set_parent(scene_root.0);
     }
 
     // Blue
@@ -129,14 +124,12 @@ pub fn setup(
 
         let stylemap = stylemaps.add(StyleMap::with_bg(color));
 
-        commands
-            .spawn(SpriteBundle {
-                sprite: smallest_space.clone(),
-                position,
-                stylemap,
-                ..Default::default()
-            })
-            .with(Parent(*scene_root));
+        commands.spawn(SpriteBundle {
+            sprite: smallest_space.clone(),
+            position,
+            stylemap,
+            ..Default::default()
+        }).set_parent(scene_root.0);
     }
 
     // Green
@@ -154,14 +147,12 @@ pub fn setup(
 
         let stylemap = stylemaps.add(StyleMap::with_bg(color));
 
-        commands
-            .spawn(SpriteBundle {
-                sprite: smallest_space.clone(),
-                position,
-                stylemap,
-                ..Default::default()
-            })
-            .with(Parent(*scene_root));
+        commands.spawn(SpriteBundle {
+            sprite: smallest_space.clone(),
+            position,
+            stylemap,
+            ..Default::default()
+        }).set_parent(scene_root.0);
     }
 
     // All
@@ -179,13 +170,11 @@ pub fn setup(
 
         let stylemap = stylemaps.add(StyleMap::with_bg(color));
 
-        commands
-            .spawn(SpriteBundle {
-                sprite: smallest_space.clone(),
-                position,
-                stylemap,
-                ..Default::default()
-            })
-            .with(Parent(*scene_root));
+        commands.spawn(SpriteBundle {
+            sprite: smallest_space.clone(),
+            position,
+            stylemap,
+            ..Default::default()
+        }).set_parent(scene_root.0);
     }
 }

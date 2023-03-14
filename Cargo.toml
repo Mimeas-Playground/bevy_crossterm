@@ -1,6 +1,6 @@
 [package]
 name = "bevy_crossterm"
-version = "0.4.0"
+version = "0.5.0"
 authors = ["Chris Yealy <christopherjyealy@gmail.com>"]
 description = "Develop terminal games with crossterm and Bevy"
 repository = "https://github.com/Mimeas-Playground/bevy_crossterm/"
